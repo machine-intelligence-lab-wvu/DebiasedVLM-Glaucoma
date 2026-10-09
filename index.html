@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debiased VLM for Glaucoma</title>
+<meta name="description" content="Addressing Bias in VLMs for Glaucoma Detection Without Protected Attribute Supervision. Attribute-free debiasing of CLIP-style models via gradient-aligned surrogate weighting.">
+<meta property="og:title" content="Addressing Bias in VLMs for Glaucoma Detection Without Protected Attribute Supervision">
+<meta property="og:description" content="A label-free debiasing method for vision-language glaucoma screening: top-k CLIP loss gradients reweight an image-pair contrastive loss to upweight the hardest examples.">
+<meta property="og:image" content="assets/fig1_overview.png">
+<style>
+:root{
+  --bg:#fbfaf7; --fg:#1b2130; --muted:#5a6376; --line:#e2dfd6; --card:#ffffff; --soft:#f3f1ea;
+  --accent:#17695a; --accent-fg:#fff; --code:#f1efe8; --good:#1f7a55; --bad:#b3372b;
+  --base:#9aa0ac; --ours:#17695a;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#11151c; --fg:#e8eaee; --muted:#9aa3b2; --line:#272d38; --card:#1a2029; --soft:#161c25;
+         --accent:#6fd3bd; --accent-fg:#06201a; --code:#1f2530; --good:#6fd0a6; --bad:#f0907f;
+         --base:#6b7383; --ours:#6fd3bd; }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.65 Georgia,"Times New Roman",serif}
+h1,h2,h3,h4,nav,.btn,button,table,figcaption,.sans{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px}
+.wide{max-width:1080px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+img{max-width:100%;height:auto;display:block}
+
+header{padding:56px 0 34px;text-align:center;border-bottom:1px solid var(--line)}
+.venue{display:inline-block;font:600 12px/1 system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);padding:7px 11px;border-radius:99px}
+h1{font-size:clamp(28px,4.6vw,42px);line-height:1.15;margin:20px auto 8px;letter-spacing:-.015em;max-width:880px}
+.sub{color:var(--muted);font-size:19px;margin:0 auto;max-width:720px}
+.authors{font:16px/1.8 system-ui,sans-serif;margin:20px 0 2px;display:flex;flex-wrap:wrap;justify-content:center}
+.authors span{white-space:nowrap;margin:0 9px}
+.affil{font:14px/1.7 system-ui,sans-serif;color:var(--muted);display:flex;flex-wrap:wrap;justify-content:center}
+.affil span{white-space:nowrap;margin:0 6px}
+.btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:22px}
+.btn{display:inline-block;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;background:var(--accent);color:var(--accent-fg);border:1px solid var(--accent)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.teaser{max-width:960px;margin:30px auto 0;text-align:left}
+.teaser img{border-radius:12px;border:1px solid var(--line);background:#fff;padding:8px}
+
+nav{position:sticky;top:0;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:5}
+nav .wrap{display:flex;gap:20px;overflow-x:auto;padding:12px 20px;font-size:14px;white-space:nowrap}
+nav a{color:var(--muted);text-decoration:none}
+nav a:hover{color:var(--accent)}
+
+section{padding:44px 0 6px}
+h2{font-size:26px;margin:0 0 12px;letter-spacing:-.01em}
+h3{font-size:18px;margin:24px 0 6px}
+.kicker{font:600 12px/1 system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+figcaption{font-size:13.5px;line-height:1.55;color:var(--muted);margin-top:8px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:22px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat b{display:block;font:700 24px/1.15 system-ui,sans-serif;color:var(--accent)}
+.stat span{font:13.5px/1.4 system-ui,sans-serif;color:var(--muted)}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:18px 0}
+.note{font:13.5px/1.5 system-ui,sans-serif;color:var(--muted);margin:8px 0 0}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 14px}
+.tabs button{font:600 14px system-ui,sans-serif;padding:7px 12px;border-radius:99px;border:1px solid var(--line);background:var(--soft);color:var(--fg);cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto}
+.up{color:var(--good);font-weight:600}
+.down{color:var(--bad);font-weight:600}
+
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--soft);font:13px system-ui,sans-serif;color:var(--muted)}
+.kpi .row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.kpi b{font:700 22px/1.2 system-ui,sans-serif;color:var(--fg);font-variant-numeric:tabular-nums}
+.kpi s{font-variant-numeric:tabular-nums;text-decoration:none}
+
+.legend{display:flex;gap:16px;font:13px system-ui,sans-serif;color:var(--muted);margin:0 0 10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.grp{display:grid;grid-template-columns:minmax(110px,auto) 1fr;gap:4px 12px;align-items:center;font:14px system-ui,sans-serif;margin-bottom:10px}
+.grp .name{grid-row:span 2}
+.grp .name small{display:block;color:var(--muted);font-size:12px}
+.bar{display:flex;align-items:center;gap:8px}
+.track{flex:1;height:12px;background:var(--soft);border-radius:4px;overflow:hidden}
+.fill{height:100%;border-radius:4px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.bar span{font-variant-numeric:tabular-nums;font-size:13px;min-width:3.4em;text-align:right}
+@media (prefers-reduced-motion: reduce){.fill{transition:none}}
+
+.eq{text-align:center;font-size:19px;margin:14px 0;overflow-x:auto}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto;font:13.5px/1.55 ui-monospace,Menlo,Consolas,monospace;position:relative}
+.copy{position:absolute;top:8px;right:8px;font:12px system-ui;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.callout{border-left:4px solid var(--accent);padding:2px 0 2px 16px;margin:18px 0}
+footer{margin-top:60px;padding:28px 0 48px;border-top:1px solid var(--line);color:var(--muted);font:14px system-ui,sans-serif;text-align:center}
+@media(max-width:560px){.kpis{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap wide">
+    <span class="venue">arXiv 2508.09087 · 2025</span>
+    <h1>Addressing Bias in VLMs for Glaucoma Detection Without Protected Attribute Supervision</h1>
+    <p class="sub">Fairer vision–language glaucoma screening, with no race, gender or ethnicity labels at training time.</p>
+
+    <div class="authors">
+      <span>Ahsan Habib Akash<sup>1</sup></span><span>Greg Murray<sup>1</sup></span><span>Annahita Amireskandari<sup>1</sup></span><span>Joel Palko<sup>1</sup></span><span>Carol Laxson<sup>1</sup></span><span>Binod Bhattarai<sup>2</sup></span><span>Prashnna Gyawali<sup>1</sup></span>
+    </div>
+    <div class="affil"><span><sup>1</sup>West Virginia University, Morgantown, WV, USA</span><span><sup>2</sup>University of Aberdeen, UK</span></div>
+
+    <div class="btns">
+      <a class="btn" href="https://arxiv.org/abs/2508.09087">Paper</a>
+      <a class="btn" href="https://arxiv.org/pdf/2508.09087">PDF</a>
+      <a class="btn ghost" href="#bibtex">BibTeX</a>
+    </div>
+
+    <figure class="teaser">
+      <img src="assets/fig1_overview.png" alt="Framework diagram. Top branch: clinical notes and fundus images pass through text and vision encoders into contrastive text-image matching, giving per-sample CLIP losses and a top-k CLIP loss gradient. Bottom branch: augmented image pairs pass through the vision encoder into contrastive image-image matching, giving per-sample contrastive losses and their gradients. The dot product of the two gradients gives weights that scale the contrastive loss.">
+      <figcaption><b>Debiased VLM.</b> A pretrained VLM aligns fundus images with clinical notes through the symmetric CLIP loss. The gradient of a top-k CLIP loss, which focuses on the hardest image–text pairs, is compared with each image pair’s contrastive-loss gradient. The alignment becomes a per-sample weight on the contrastive loss, so the visual encoder puts more effort into hard examples while keeping multimodal alignment.</figcaption>
+    </figure>
+  </div>
+</header>
+
+<nav aria-label="Sections"><div class="wrap wide">
+  <a href="#overview">Overview</a><a href="#method">Method</a><a href="#data">Data</a><a href="#results">Results</a><a href="#bibtex">BibTeX</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="overview">
+  <div class="kicker">Overview</div>
+  <h2>Fairness when the protected attributes are hidden</h2>
+  <p>Glaucoma is a leading cause of irreversible blindness and hits underserved populations hardest. Vision–language models can read fundus images alongside clinical notes, but pretraining data are imbalanced, and these models can perform worse for some demographic groups. Most debiasing methods, FairCLIP among them, need the protected attribute during training. That is often impossible for legal, ethical or regulatory reasons, and such methods usually handle one attribute at a time.</p>
+  <p>This work debiases a CLIP-style model <b>without any protected-attribute labels</b>. It follows the worst-case (Rawlsian) view of fairness: rather than equalizing known groups, it reduces the loss on the hardest examples, wherever they come from.</p>
+
+  <div class="stats">
+    <div class="stat"><b>17.10 → 3.50</b><span>EOD for ethnicity (lower is fairer)</span></div>
+    <div class="stat"><b>58.2 → 70.2</b><span>AUC for Spanish-speaking patients, 1.7% of the cohort</span></div>
+    <div class="stat"><b>57.9 → 63.1</b><span>AUC for Hispanic patients, 4.0% of the cohort</span></div>
+    <div class="stat"><b>0</b><span>protected-attribute labels used in training</span></div>
+  </div>
+
+  <h2>Abstract</h2>
+  <p>Vision–Language Models (VLMs) have achieved remarkable success on multimodal tasks such as image–text retrieval and zero-shot classification, yet they can demonstrate demographic biases even when explicit protected attributes are absent during training. In this work, we focus on automated glaucoma screening from retinal fundus images, a critical application given that glaucoma is a leading cause of irreversible blindness and disproportionately affects underserved populations. Building on a reweighting-based contrastive learning framework, we introduce an attribute-agnostic debiasing method that (i) infers proxy subgroups via unsupervised clustering of image–image embeddings, (ii) computes gradient-similarity weights between the CLIP-style multimodal loss and a SimCLR-style image-pair contrastive loss, and (iii) applies these weights in a joint, top-k weighted objective to upweight underperforming clusters. This label-free approach adaptively targets the hardest examples, thereby reducing subgroup disparities. We evaluate our method on the Harvard–FairVLMed glaucoma subset, reporting Equalized-Odds Distance (EOD), Equalized Subgroup AUC (ES-AUC), and Groupwise AUC to demonstrate equitable performance across inferred demographic subgroups.</p>
+</section>
+
+<section id="method">
+  <div class="kicker">Method</div>
+  <h2>Surrogate weighting from gradient alignment</h2>
+  <ol>
+    <li><b>Focus on the hardest pairs.</b> Instead of averaging the CLIP loss over the batch, take the mean of the top-k per-sample losses. This is a smooth surrogate for minimizing the worst latent group’s loss.
+      <p class="eq">ℓ<sub>topk-clip</sub> = ½ Σ<sub>m</sub> [ L<sub>CLIP</sub>(x̃<sub>m</sub>, t<sub>m</sub>) − λ<sub>clip</sub> ]<sub>+</sub> / k + λ<sub>clip</sub></p>
+      where λ<sub>clip</sub> is the k-th largest loss.</li>
+    <li><b>Score each image pair.</b> Two augmentations of every image give a SimCLR-style contrastive loss ℓ<sub>ctr</sub>. For each view m, the weight is the alignment between its gradient and the top-k CLIP gradient, clipped at zero:
+      <p class="eq">w<sub>m</sub> = max{ (∇<sub>θ<sub>I</sub></sub> ℓ<sub>topk-clip</sub>)<sup>⊤</sup> ∇<sub>θ<sub>I</sub></sub> ℓ<sub>ctr</sub>(x̃<sub>m</sub>), 0 }</p></li>
+    <li><b>Reweight.</b> The weights are normalized into a distribution and applied to the contrastive loss, so the image pairs whose updates most reduce the hardest CLIP losses get the most emphasis.</li>
+  </ol>
+  <div class="panel scroll">
+    <table>
+      <thead><tr><th>Method</th><th>Supervision required</th><th>Objective</th></tr></thead>
+      <tbody>
+        <tr><td>CLIP</td><td>None</td><td>L<sub>CLIP</sub></td></tr>
+        <tr><td>FairCLIP</td><td>Protected attribute</td><td>L<sub>CLIP</sub> + λ · adversarial term on attribute a</td></tr>
+        <tr><td><b>Debiased CLIP (ours)</b></td><td><b>None</b></td><td>Σ<sub>i</sub> w<sub>i</sub> L(I<sub>i</sub>, T<sub>i</sub>), with w<sub>i</sub> from gradient alignment</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">One model covers every attribute. FairCLIP trains a separate model per protected attribute and needs that attribute’s labels.</div>
+</section>
+
+<section id="data">
+  <div class="kicker">Data and protocol</div>
+  <h2>Harvard–FairVLMed</h2>
+  <p>10,000 de-identified records from 10,000 patients, each with a fundus image, a clinical note (11–332 words, mean 147) and a glaucoma label. The original split is used: 7,000 train, 1,000 validation and 2,000 test. Demographics are used only for evaluation: 7,690 White, 1,491 Black and 819 Asian patients; 56.3% female; 4.0% Hispanic; 92.5% English-speaking and 1.7% Spanish-speaking.</p>
+  <p>CLIP ViT-L is fine-tuned on image–note pairs and then evaluated <b>zero-shot</b> with the prompts “This image contains glaucoma” and “This image does not contain glaucoma”. Metrics, all in percent:</p>
+  <ul>
+    <li><b>EOD</b> (Equalized Odds Distance, lower is better): the largest gaps in TPR and FPR between subgroups.</li>
+    <li><b>ES-AUC</b> (Equalized Subgroup AUC, higher is better): overall AUC penalized by subgroup disparity.</li>
+    <li><b>Group-wise AUC</b>: AUC within each subgroup.</li>
+  </ul>
+</section>
+
+<section id="results">
+  <div class="kicker">Results</div>
+  <h2>CLIP vs. Debiased CLIP across six attributes</h2>
+  <p>Debiased CLIP lowers EOD on four of six attributes (ethnicity, language, age, marital status) and raises ES-AUC on five (all but gender). Small minority groups often gain the most. Race and gender get worse on EOD, and gender also loses ES-AUC.</p>
+  <div class="panel">
+    <div class="tabs" id="attrTabs" role="group" aria-label="Protected attribute"></div>
+    <div class="kpis">
+      <div class="kpi">EOD ↓<div class="row"><b id="eodNew"></b><s id="eodOld"></s></div></div>
+      <div class="kpi">ES-AUC ↑<div class="row"><b id="esNew"></b><s id="esOld"></s></div></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--base)"></i>CLIP ViT-L</span><span><i style="background:var(--ours)"></i>Debiased CLIP ViT-L</span></div>
+    <div id="groups" aria-live="polite"></div>
+    <p class="note" id="attrNote"></p>
+  </div>
+
+  <h3>Full table</h3>
+  <div class="panel scroll">
+    <table id="fullTable"></table>
+    <p class="note">Zero-shot transfer on Harvard–FairVLMed. All values in percent.</p>
+  </div>
+</section>
+
+<section id="bibtex">
+  <div class="kicker">Citation</div>
+  <h2>BibTeX</h2>
+<pre><button class="copy" type="button" data-target="bibtext">Copy</button><code id="bibtext">@article{akash2025debiasedvlm,
+  title   = {Addressing Bias in VLMs for Glaucoma Detection Without
+             Protected Attribute Supervision},
+  author  = {Akash, Ahsan Habib and Murray, Greg and Amireskandari, Annahita and
+             Palko, Joel and Laxson, Carol and Bhattarai, Binod and Gyawali, Prashnna},
+  journal = {arXiv preprint arXiv:2508.09087},
+  year    = {2025}
+}</code></pre>
+</section>
+
+<section id="ack">
+  <div class="kicker">Acknowledgment</div>
+  <p style="font-size:15px;color:var(--muted)">Supported by the Defense Advanced Research Projects Agency under Grant AI-CRAFT AWD16069, and by the National Institutes of Health under Grant P20 GM144230 from the National Institute of General Medical Sciences (NIGMS).</p>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">West Virginia University · <a href="https://arxiv.org/abs/2508.09087">arXiv:2508.09087</a></div>
+</footer>
+
+<script>
+// [attribute, [eodCLIP, esCLIP], [eodOurs, esOurs], groups: [name, share, aucCLIP, aucOurs]]
+const ATTR=[
+  ["Race",[24.00,64.90],[36.36,65.49],[["Asian","8.2%",70.85,68.52],["Black","14.9%",65.99,67.29],["White","76.9%",67.99,66.42]],
+   "EOD rises, but ES-AUC improves and the Black subgroup (14.9% of the cohort) gains AUC."],
+  ["Gender",[5.23,66.21],[11.47,62.77],[["Female","56.3%",66.93,64.09],["Male","43.7%",70.03,70.88]],
+   "The one attribute where both fairness metrics get worse."],
+  ["Ethnicity",[17.10,61.64],[3.50,64.40],[["Non-Hispanic","90.6%",68.66,67.18],["Hispanic","4.0%",57.92,63.09]],
+   "The largest EOD drop. Hispanic patients gain over five AUC points."],
+  ["Language",[22.28,57.66],[16.00,60.97],[["English","92.5%",68.44,66.74],["Spanish","1.7%",58.24,70.17],["Others","0.8%",60.08,60.52]],
+   "Spanish-speaking patients gain about 12 AUC points, closing most of the gap to English speakers."],
+  ["Age",[27.72,58.26],[16.24,58.89],[["Young","23.1%",53.79,54.59],["Old","77.0%",70.95,68.42]],
+   "EOD falls by more than 11 points; the smaller young group gains slightly."],
+  ["Marital status",[46.88,40.43],[28.57,49.33],[["Married","57.4%",52.90,52.46],["Single","26.4%",70.45,68.80],["Divorced","6.6%",62.08,62.15],["Separated","1.0%",80.63,72.25],["Widowed","6.1%",55.61,66.75]],
+   "EOD falls from 46.88 to 28.57 and ES-AUC rises by about 9 points; widowed patients gain over 11 AUC points."]
+];
+const MIN=45, MAX=85;
+const pct=v=>Math.max(0,Math.min(100,(v-MIN)/(MAX-MIN)*100));
+function delta(newV, oldV, lowerBetter){
+  const d=newV-oldV, good=lowerBetter? d<0 : d>0;
+  return `<span class="${good?'up':'down'}">${d>0?'+':''}${d.toFixed(2)}</span> <span>from ${oldV.toFixed(2)}</span>`;
+}
+const tabs=document.getElementById("attrTabs");
+function show(i){
+  const [name,base,ours,groups,note]=ATTR[i];
+  [...tabs.children].forEach((b,j)=>b.setAttribute("aria-pressed",i===j));
+  document.getElementById("eodNew").textContent=ours[0].toFixed(2);
+  document.getElementById("eodOld").innerHTML=delta(ours[0],base[0],true);
+  document.getElementById("esNew").textContent=ours[1].toFixed(2);
+  document.getElementById("esOld").innerHTML=delta(ours[1],base[1],false);
+  document.getElementById("groups").innerHTML=groups.map(([g,share,a,b])=>
+    `<div class="grp"><div class="name">${g}<small>${share} of cohort</small></div>
+      <div class="bar"><div class="track" role="img" aria-label="${g} CLIP AUC ${a.toFixed(2)}"><div class="fill" style="width:${pct(a)}%;background:var(--base)"></div></div><span>${a.toFixed(2)}</span></div>
+      <div class="bar"><div class="track" role="img" aria-label="${g} Debiased CLIP AUC ${b.toFixed(2)}"><div class="fill" style="width:${pct(b)}%;background:var(--ours)"></div></div><span${b>a?' class="up"':''}>${b.toFixed(2)}</span></div></div>`).join("");
+  document.getElementById("attrNote").textContent=note+" Group-wise AUC bars span "+MIN+"–"+MAX+"%.";
+}
+ATTR.forEach((a,i)=>{const b=document.createElement("button");b.type="button";b.textContent=a[0];b.onclick=()=>show(i);tabs.appendChild(b)});
+show(2);
+
+let h='<thead><tr><th>Attribute</th><th>Model</th><th class="n">EOD ↓</th><th class="n">ES-AUC ↑</th><th>Group-wise AUC</th></tr></thead><tbody>';
+ATTR.forEach(([name,base,ours,groups])=>{
+  const gs=k=>groups.map(g=>`${g[0]} ${g[k].toFixed(2)}`).join(" · ");
+  h+=`<tr><td rowspan="2"><b>${name}</b></td><td>CLIP</td><td class="n">${base[0].toFixed(2)}</td><td class="n">${base[1].toFixed(2)}</td><td style="font-size:13px">${gs(2)}</td></tr>`;
+  h+=`<tr><td>Debiased CLIP</td><td class="n ${ours[0]<base[0]?'up':'down'}">${ours[0].toFixed(2)}</td><td class="n ${ours[1]>base[1]?'up':'down'}">${ours[1].toFixed(2)}</td><td style="font-size:13px">${gs(3)}</td></tr>`;
+});
+document.getElementById("fullTable").innerHTML=h+"</tbody>";
+
+document.querySelectorAll(".copy").forEach(btn=>btn.onclick=()=>{
+  const t=document.getElementById(btn.dataset.target).textContent;
+  navigator.clipboard.writeText(t).then(()=>{btn.textContent="Copied";setTimeout(()=>btn.textContent="Copy",1500)});
+});
+</script>
+</body>
+</html>
